@@ -5,66 +5,57 @@ import eml_parser
 import os
 import glob
 import mysql.connector
-from mysql.connector import errorcode
 
-TABLES = {}
-TABLES['employees'] = (
-    "CREATE TABLE `employees` ("
-    "  `message_id` int(11) NOT NULL,"
-    "  `sender` date NOT NULL,"
-    "  `first_name` varchar(14) NOT NULL,"
-    "  `last_name` varchar(16) NOT NULL,"
-    "  `gender` enum('M','F') NOT NULL,"
-    "  `hire_date` date NOT NULL,"
-    "  PRIMARY KEY (`emp_no`)"
-    ") ENGINE=InnoDB")
+# from mysql.connector import errorcode
 
-TABLES['departments'] = (
-    "CREATE TABLE `departments` ("
-    "  `dept_no` char(4) NOT NULL,"
-    "  `dept_name` varchar(40) NOT NULL,"
-    "  PRIMARY KEY (`dept_no`), UNIQUE KEY `dept_name` (`dept_name`)"
-    ") ENGINE=InnoDB")
-
-TABLES['salaries'] = (
-    "CREATE TABLE `salaries` ("
-    "  `emp_no` int(11) NOT NULL,"
-    "  `salary` int(11) NOT NULL,"
-    "  `from_date` date NOT NULL,"
-    "  `to_date` date NOT NULL,"
-    "  PRIMARY KEY (`emp_no`,`from_date`), KEY `emp_no` (`emp_no`),"
-    "  CONSTRAINT `salaries_ibfk_1` FOREIGN KEY (`emp_no`) "
-    "     REFERENCES `employees` (`emp_no`) ON DELETE CASCADE"
-    ") ENGINE=InnoDB")
 dic_list = []
 path = 'C:\\Users\\Acer\\Desktop\\eml'
-
-def dbc_connect():
-    try:
-      cnx = mysql.connector.connect(user='jessy', password='qwerty1234', host='127.0.0.1',
-                                    database='employ')
-    except mysql.connector.Error as err:
-      if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
-        print("Something is wrong with your user name or password")
-      elif err.errno == errorcode.ER_BAD_DB_ERROR:
-        print("Database does not exist")
-      else:
-        print(err)
-    else:
-      cnx.close()
+datadir_path = 'C:\\xampp\\mysql\\data'
 
 
+class Data:
+    def __init__(self, table_name):
+        self.table_name = table_name
+
+        # connection to database
+        self.cnx = mysql.connector.connect(user='jessy', password='qwerty1234', host='127.0.0.1',
+                                           database='wanderer_bd')
+        '''
+        except mysql.connector.Error as err:
+            if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+                print("Something is wrong with your user name or password")
+            elif err.errno == errorcode.ER_BAD_DB_ERROR:
+                print("Database does not exist")
+            else:
+                print(err)
+        else:
+            self.cnx.close()
+            '''
+
+    # check if tables in database exist, if not -> create
+    def load_dataframe(self):
+        # Create a cursor object
+        cur = self.cnx.cursor()
+
+        # Convert the DataFrame to a CSV file-like object
+        #join_list = ['LOAD DATA INFILE "df.csv" INTO TABLE (%s) FIELDS TERMINATED BY', ',' LINES TERMINATED BY "\n" IGNORE 1 LINES ']
+        query = f"LOAD DATA LOCAL INFILE 'df.csv' INTO TABLE emails FIELDS TERMINATED BY ',' IGNORE 1 LINES "
+        cur.execute(query)
+        self.cnx.commit()
+
+
+# json parsing
 def json_serial(obj):
     if isinstance(obj, datetime.datetime):
         serial = obj.isoformat()
         return serial
 
 
+# parsing EMLs
 def parsing(path):
     for i in glob.glob(os.path.join(path, "*.eml")):
         print(i)
         with open(os.path.join(path, i), 'rb') as fhdl:
-            print(fhdl)
             raw_email = fhdl.read()
 
             ep = eml_parser.EmlParser()
@@ -84,29 +75,20 @@ def parsing(path):
                 dict['receiver_name'] = y['header']['header']['to'][0].split(' <')[0],
                 dict['sender_name'] = y['header']['header']['from'][0].split(' <')[0],
             except KeyError:
-                print(y['header']['subject'])
+                print(y['header']['from'])
             dic_list.append(dict)
 
     df = pd.DataFrame(dic_list)
+    os.chdir(datadir_path)
     df.to_csv('df.csv')
+    return df
 
-    def creating_tables():
-        for table_name in TABLES:
-            table_description = TABLES[table_name]
-            try:
-                print("Creating table {}: ".format(table_name), end='')
-                cursor.execute(table_description)
-            except mysql.connector.Error as err:
-                if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
-                    print("already exists.")
-                else:
-                    print(err.msg)
-            else:
-                print("OK")
-
-        cursor.close()
-        cnx.close()
 
 if __name__ == '__main__':
-    dbc_connect()
     os.chdir(path)
+    commit = Data('emails')
+    try:
+        df = parsing(path)
+        commit.load_dataframe()
+    except Exception as e:
+        print(e)
