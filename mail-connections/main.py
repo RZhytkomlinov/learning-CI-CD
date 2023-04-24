@@ -32,13 +32,11 @@ class Data:
             self.cnx.close()
             '''
 
-    # check if tables in database exist, if not -> create
+    
     def load_dataframe(self):
         # Create a cursor object
         cur = self.cnx.cursor()
 
-        # Convert the DataFrame to a CSV file-like object
-        #join_list = ['LOAD DATA INFILE "df.csv" INTO TABLE (%s) FIELDS TERMINATED BY', ',' LINES TERMINATED BY "\n" IGNORE 1 LINES ']
         query = f"LOAD DATA LOCAL INFILE 'df.csv' INTO TABLE emails FIELDS TERMINATED BY ',' IGNORE 1 LINES "
         cur.execute(query)
         self.cnx.commit()
